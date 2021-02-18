@@ -4,13 +4,13 @@ const session = require("express-session");
 const mongoose = require("mongoose");
 const logger = require("morgan");
 const mongoSessionStore = require("connect-mongo");
-const expressValidator = require("express-validator");
+// const expressValidator = require("express-validator");
 const passport = require("passport");
 const helmet = require("helmet");
 const compression = require("compression");
 
 /* Loads all variables from .env file to "process.env" */
-require("dotenv").config();
+require("dotenv").config({ path: ".env.prod" });
 /* Require our models here so we can use the mongoose.model() singleton to reference our models across our app */
 require("./models/Post");
 require("./models/User");
@@ -26,17 +26,28 @@ const handle = app.getRequestHandler();
 const mongooseOptions = {
   useNewUrlParser: true,
   useCreateIndex: true,
-  useFindAndModify: false
+  useFindAndModify: false,
 };
 
 mongoose
-  .connect(
-    process.env.MONGO_URI,
-    mongooseOptions
-  )
-  .then(() => console.log("DB connected"));
+  .connect(process.env.MONGO_URI, mongooseOptions)
+  .then((resp) => {
+    const readyState = resp.connection.readyState;
+    switch (readyState) {
+      case 1:
+        console.log("connect to mongodb.");
+        break;
+      default:
+        console.log("fail connect to mongodb: ");
+        break;
+    }
+  })
+  .catch((err) => {
+    console.log("46 app.js -- connect to mongodb fail", err.message);
+    process.exit(1);
+  });
 
-mongoose.connection.on("error", err => {
+mongoose.connection.on("error", (err) => {
   console.log(`DB connection error: ${err.message}`);
 });
 
@@ -53,7 +64,7 @@ app.prepare().then(() => {
   /* Body Parser built-in to Express as of version 4.16 */
   server.use(express.json());
   /* Express Validator will validate form data sent to the backend */
-  server.use(expressValidator());
+  // server.use(expressValidator());
 
   /* give all Next.js's requests to Next.js server */
   server.get("/_next/*", (req, res) => {
@@ -71,7 +82,7 @@ app.prepare().then(() => {
     secret: process.env.SESSION_SECRET,
     store: new MongoStore({
       mongooseConnection: mongoose.connection,
-      ttl: 14 * 24 * 60 * 60 // save session for 14 days
+      ttl: 14 * 24 * 60 * 60, // save session for 14 days
     }),
     // forces the session to be saved back to the store
     resave: false,
@@ -79,8 +90,8 @@ app.prepare().then(() => {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24 * 14 // expires in 14 days
-    }
+      maxAge: 1000 * 60 * 60 * 24 * 14, // expires in 14 days
+    },
   };
 
   if (!dev) {
@@ -105,7 +116,7 @@ app.prepare().then(() => {
   - we use skip to ignore static files from _next folder */
   server.use(
     logger("dev", {
-      skip: req => req.url.includes("_next")
+      skip: (req) => req.url.includes("_next"),
     })
   );
 
@@ -132,7 +143,7 @@ app.prepare().then(() => {
     handle(req, res);
   });
 
-  server.listen(port, err => {
+  server.listen(port, (err) => {
     if (err) throw err;
     console.log(`Server listening on ${ROOT_URL}`);
   });
